@@ -1,4 +1,4 @@
-# app.py - Versão para Streamlit Cloud
+# app.py - Versão com filtro por LOCAL
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -67,7 +67,22 @@ if uploaded_file is not None:
         ['Todos', 'A Visitar', 'Visitado']
     )
     
+    # ===== NOVO FILTRO: LOCAL =====
+    st.sidebar.subheader("🏥 Local")
+    
+    # Obtém os locais únicos (tratando valores vazios)
+    locais = df['Local'].dropna().unique().tolist()
+    locais = [str(l).strip() for l in locais if str(l).strip() != '']
+    locais = sorted(locais)
+    
+    local_filter = st.sidebar.selectbox(
+        "Local de Atendimento",
+        ['Todos'] + locais,
+        help="Filtra pelos locais de atendimento (ex: MED IMAGEM, ARARANGUÁ, ANGIOMED)"
+    )
+    
     # Cidade
+    st.sidebar.subheader("📍 Localização")
     cidades = ['Todos'] + sorted(df['Cidade'].dropna().unique().tolist())
     cidade_filter = st.sidebar.selectbox(
         "Cidade",
@@ -114,13 +129,18 @@ if uploaded_file is not None:
         mask = (
             df_filtrado['Médico'].str.contains(busca, case=False, na=False) |
             df_filtrado['Bairro'].str.contains(busca, case=False, na=False) |
-            df_filtrado['Cidade'].str.contains(busca, case=False, na=False)
+            df_filtrado['Cidade'].str.contains(busca, case=False, na=False) |
+            df_filtrado['Local'].str.contains(busca, case=False, na=False)
         )
         df_filtrado = df_filtrado[mask]
     
     # Status
     if status_filter != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['Status'] == status_filter]
+    
+    # ===== NOVO FILTRO: LOCAL =====
+    if local_filter != 'Todos':
+        df_filtrado = df_filtrado[df_filtrado['Local'] == local_filter]
     
     # Cidade
     if cidade_filter != 'Todos':
@@ -157,8 +177,8 @@ if uploaded_file is not None:
     # ===== TABELA PRINCIPAL =====
     st.subheader(f"📋 Lista de Médicos ({len(df_filtrado)} encontrados)")
     
-    # Exibe a tabela
-    colunas_exibir = ['Médico', 'Bairro', 'Cidade', 'Celular Médico', 'Status', 'Data_Visita']
+    # Exibe a tabela - adicionando coluna Local
+    colunas_exibir = ['Médico', 'Local', 'Bairro', 'Cidade', 'Celular Médico', 'Status', 'Data_Visita']
     df_display = df_filtrado[colunas_exibir].copy()
     
     # Função para colorir o status
@@ -256,6 +276,7 @@ if uploaded_file is not None:
 - **Email:** {get_val('Email1')}
 
 **🏥 LOCAL**
+- **Local:** {get_val('Local')}
 - **Endereço:** {get_val('Endereço')}, {get_val('Número')}
 - **Complemento:** {get_val('Complemento')}
 - **Bairro:** {get_val('Bairro')}
@@ -345,14 +366,18 @@ else:
     
     1. **Clique em "Browse files"** no menu lateral esquerdo
     2. **Selecione a planilha** "Planilha medicos (1).xlsx"
-    3. **Use os filtros** para encontrar os médicos por cidade, bairro ou status
+    3. **Use os filtros** para encontrar os médicos:
+       - 🏥 **Local** - Filtrar por local de atendimento
+       - 📍 **Cidade e Bairro** - Filtrar por localização
+       - 📊 **Status** - Ver apenas visitados ou a visitar
+       - 📅 **Data** - Filtrar por período de visitas
     4. **Selecione um médico** na lista e clique em "Marcar como Visitado"
     5. **Exporte a planilha** atualizada quando terminar
     
     ### ✨ Funcionalidades:
     
-    - ✅ Filtrar médicos por cidade, bairro e status
-    - ✅ Buscar por nome, bairro ou cidade
+    - ✅ Filtrar por **Local**, cidade, bairro e status
+    - ✅ Buscar por nome, bairro, cidade ou local
     - ✅ Marcar visitas com data e hora
     - ✅ Ver detalhes completos do médico
     - ✅ Exportar planilha filtrada ou completa
