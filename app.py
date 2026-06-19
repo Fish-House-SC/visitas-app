@@ -1,4 +1,4 @@
-# app.py - Versão com MÚLTIPLOS LOCAIS e BUSCA INTELIGENTE
+# app.py - Versão com SELEÇÃO PERMANENTE DE LOCAIS
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -14,7 +14,6 @@ st.set_page_config(
 
 # ===== FUNÇÃO PARA FORMATAR DATA =====
 def formatar_data_br(data):
-    """Converte data para formato brasileiro dd/MM/yyyy"""
     if pd.isna(data) or data == '':
         return ''
     try:
@@ -27,7 +26,6 @@ def formatar_data_br(data):
         return str(data)
 
 def hoje_br():
-    """Retorna a data de hoje no formato brasileiro"""
     return datetime.now().strftime('%d/%m/%Y')
 
 # TÍTULO
@@ -43,6 +41,8 @@ if 'modo_edicao' not in st.session_state:
     st.session_state.modo_edicao = False
 if 'medico_editando' not in st.session_state:
     st.session_state.medico_editando = None
+if 'locais_selecionados' not in st.session_state:
+    st.session_state.locais_selecionados = []  # LISTA PERMANENTE DE LOCAIS
 
 # ===== UPLOAD DO ARQUIVO =====
 st.sidebar.header("📤 Upload da Planilha")
@@ -54,7 +54,6 @@ uploaded_file = st.sidebar.file_uploader(
 
 # ===== FUNÇÃO PARA SALVAR EDIÇÕES =====
 def salvar_edicao(dados_editados):
-    """Salva as alterações feitas no médico"""
     df = st.session_state.df
     idx = df[df['Médico'] == st.session_state.medico_editando].index
     
@@ -69,9 +68,7 @@ def salvar_edicao(dados_editados):
         st.success("✅ Alterações salvas com sucesso!")
         st.rerun()
 
-# ===== FUNÇÃO PARA EXCLUIR MÉDICO =====
 def excluir_medico(medico):
-    """Exclui um médico da planilha"""
     df = st.session_state.df
     df = df[df['Médico'] != medico]
     st.session_state.df = df
@@ -82,13 +79,11 @@ def excluir_medico(medico):
 
 # ===== CARREGAR DADOS =====
 if uploaded_file is not None:
-    # Verifica se é um arquivo novo
     if st.session_state.uploaded_file_name != uploaded_file.name:
         try:
             df = pd.read_excel(uploaded_file, sheet_name='Ariana Martins - Cadastro_Medic')
             df = df.dropna(subset=['Médico'])
             
-            # Adiciona colunas de controle
             if 'Status' not in df.columns:
                 df['Status'] = 'A Visitar'
             if 'Ultima_Visita' not in df.columns:
@@ -100,11 +95,11 @@ if uploaded_file is not None:
             
             st.session_state.df = df
             st.session_state.uploaded_file_name = uploaded_file.name
+            st.session_state.locais_selecionados = []  # Reseta os locais
             st.sidebar.success(f"✅ {len(df)} médicos carregados!")
         except Exception as e:
             st.sidebar.error(f"❌ Erro ao carregar: {str(e)}")
     
-    # Usa o DataFrame do estado
     df = st.session_state.df.copy()
     
     # ===== SIDEBAR COM FILTROS =====
@@ -126,7 +121,7 @@ if uploaded_file is not None:
         key="cidade_filter"
     )
     
-    # ===== BAIRRO (DEPENDENTE DA CIDADE) =====
+    # ===== BAIRRO =====
     if cidade_filter != 'Todos':
         bairros_cidade = df[df['Cidade'] == cidade_filter]['Bairro'].dropna().unique().tolist()
         bairros_cidade = sorted(bairros_cidade)
@@ -139,10 +134,10 @@ if uploaded_file is not None:
         key="bairro_filter"
     )
     
-    # ===== LOCAL - MÚLTIPLA SELEÇÃO COM BUSCA =====
-    st.sidebar.subheader("🏥 Local")
+    # ===== LOCAL - SELEÇÃO PERMANENTE =====
+    st.sidebar.subheader("🏥 Selecionar Locais")
     
-    # Obtém os locais baseado na cidade selecionada
+    # Obtém todos os locais disponíveis
     if cidade_filter != 'Todos':
         locais_cidade = df[df['Cidade'] == cidade_filter]['Local'].dropna().unique().tolist()
         locais_cidade = [str(l).strip() for l in locais_cidade if str(l).strip() != '']
@@ -152,32 +147,69 @@ if uploaded_file is not None:
         locais_cidade = [str(l).strip() for l in locais_cidade if str(l).strip() != '']
         locais_cidade = sorted(locais_cidade)
     
-    # ===== BUSCA INTELIGENTE POR LOCAL =====
-    st.sidebar.markdown("**Busca inteligente:**")
+    # ===== PASSO 1: BUSCAR LOCAIS =====
+    st.sidebar.markdown("**🔍 Buscar local:**")
     busca_local = st.sidebar.text_input(
-        "🔍 Digite parte do nome (ex: BA)",
-        placeholder="Ex: BA, ANGIO, HOSPITAL...",
-        help="Digite as primeiras letras do local. Ex: 'BA' mostra BAIA SUL, BAIA SUL CENTER, etc."
+        "",
+        placeholder="Digite para buscar (ex: BA, RES, HOSPITAL...)",
+        key="busca_local_input",
+        help="Digite para encontrar locais rapidamente"
     )
     
-    # Filtra os locais baseado na busca
+    # Filtra os locais para exibição
     if busca_local:
         busca_local_upper = busca_local.upper().strip()
-        locais_filtrados = [l for l in locais_cidade if busca_local_upper in l.upper()]
+        locais_encontrados = [l for l in locais_cidade if busca_local_upper in l.upper()]
     else:
-        locais_filtrados = locais_cidade
+        locais_encontrados = locais_cidade
     
-    # ===== MÚLTIPLA SELEÇÃO DE LOCAIS =====
-    locais_selecionados = st.sidebar.multiselect(
-        "Selecione um ou mais locais:",
-        options=locais_filtrados,
-        default=[],
-        help="Escolha vários locais para filtrar. Use a busca acima para encontrar mais rápido!"
-    )
+    # ===== PASSO 2: SELECIONAR LOCAIS ENCONTRADOS =====
+    if locais_encontrados:
+        st.sidebar.markdown(f"**📋 {len(locais_encontrados)} locais encontrados:**")
+        
+        # Multiselect para selecionar locais da busca
+        locais_para_adicionar = st.sidebar.multiselect(
+            "Selecione os locais para adicionar:",
+            options=locais_encontrados,
+            default=[],
+            key="locais_para_adicionar",
+            help="Selecione os locais que deseja adicionar à sua lista"
+        )
+        
+        # ===== PASSO 3: BOTÃO ADICIONAR =====
+        if st.sidebar.button("➕ Adicionar Locais Selecionados", type="primary", use_container_width=True):
+            if locais_para_adicionar:
+                # Adiciona os novos locais sem remover os existentes
+                for local in locais_para_adicionar:
+                    if local not in st.session_state.locais_selecionados:
+                        st.session_state.locais_selecionados.append(local)
+                st.sidebar.success(f"✅ {len(locais_para_adicionar)} locais adicionados!")
+                st.rerun()
+            else:
+                st.sidebar.warning("⚠️ Selecione pelo menos um local")
     
-    # Mostra quantos locais foram selecionados
-    if locais_selecionados:
-        st.sidebar.info(f"📍 {len(locais_selecionados)} locais selecionados")
+    # ===== PASSO 4: MOSTRAR LOCAIS SELECIONADOS =====
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📌 Locais Selecionados")
+    
+    if st.session_state.locais_selecionados:
+        # Mostra os locais selecionados
+        for i, local in enumerate(st.session_state.locais_selecionados):
+            col1, col2 = st.sidebar.columns([4, 1])
+            with col1:
+                st.sidebar.caption(f"📍 {local}")
+            with col2:
+                # Botão para remover individualmente
+                if st.sidebar.button("✕", key=f"remove_{i}", help=f"Remover {local}"):
+                    st.session_state.locais_selecionados.remove(local)
+                    st.rerun()
+        
+        st.sidebar.info(f"✅ {len(st.session_state.locais_selecionados)} locais selecionados")
+        
+        # Botão para limpar todos
+        if st.sidebar.button("🗑️ Limpar Todos os Locais", use_container_width=True):
+            st.session_state.locais_selecionados = []
+            st.rerun()
     else:
         st.sidebar.info("📍 Nenhum local selecionado (mostra todos)")
     
@@ -226,9 +258,9 @@ if uploaded_file is not None:
     if bairro_filter != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['Bairro'] == bairro_filter]
     
-    # ===== LOCAL - MÚLTIPLA SELEÇÃO =====
-    if locais_selecionados:
-        df_filtrado = df_filtrado[df_filtrado['Local'].isin(locais_selecionados)]
+    # ===== LOCAL - FILTRO PELA LISTA PERMANENTE =====
+    if st.session_state.locais_selecionados:
+        df_filtrado = df_filtrado[df_filtrado['Local'].isin(st.session_state.locais_selecionados)]
     
     # Data
     if usar_filtro_data and 'Data_Visita' in df_filtrado.columns:
@@ -266,17 +298,14 @@ if uploaded_file is not None:
     # ===== TABELA PRINCIPAL =====
     st.subheader(f"📋 Lista de Médicos ({len(df_filtrado)} encontrados)")
     
-    # Exibe a tabela
     colunas_exibir = ['Médico', 'Local', 'Bairro', 'Cidade', 'Celular Médico', 'Status', 'Data_Visita']
     df_display = df_filtrado[colunas_exibir].copy()
     
-    # Formata as datas
     if 'Data_Visita' in df_display.columns:
         df_display['Data_Visita'] = df_display['Data_Visita'].apply(
             lambda x: x if pd.isna(x) or x == '' else str(x)
         )
     
-    # Função para colorir o status
     def color_status(val):
         if val == 'Visitado':
             return 'background-color: #90EE90'
@@ -291,14 +320,12 @@ if uploaded_file is not None:
     # ===== SELEÇÃO E AÇÕES =====
     st.markdown("---")
     
-    # Lista de médicos para seleção
     medicos_lista = [''] + df_filtrado['Médico'].tolist()
     medico_selecionado = st.selectbox(
         "👤 Selecione um médico:",
         medicos_lista
     )
     
-    # ===== BOTÕES DE AÇÃO =====
     if medico_selecionado:
         col_actions, col_details = st.columns([1, 2])
         
@@ -342,7 +369,6 @@ if uploaded_file is not None:
         
         with col_details:
             if st.session_state.modo_edicao and st.session_state.medico_editando == medico_selecionado:
-                # ===== MODO EDIÇÃO =====
                 st.subheader("✏️ Editar Informações")
                 st.info(f"Editando: **{medico_selecionado}**")
                 
@@ -404,7 +430,6 @@ if uploaded_file is not None:
                                 st.session_state.medico_editando = None
                                 st.rerun()
             else:
-                # ===== MODO VISUALIZAÇÃO =====
                 st.subheader("📋 Detalhes do Médico")
                 dados = df[df['Médico'] == medico_selecionado]
                 if len(dados) > 0:
@@ -527,7 +552,6 @@ if uploaded_file is not None:
             )
 
 else:
-    # ===== TELA INICIAL =====
     st.info("👆 Faça o upload da sua planilha no menu lateral para começar")
     
     st.markdown("""
@@ -535,25 +559,26 @@ else:
     
     1. **Clique em "Browse files"** no menu lateral esquerdo
     2. **Selecione a planilha** "Planilha medicos (1).xlsx"
-    3. **Use os filtros** para encontrar os médicos:
-       - 📍 **Cidade** - Selecione a cidade (Bairros e Locais são filtrados automaticamente!)
-       - 🏘️ **Bairro** - Apenas bairros da cidade selecionada
-       - 🏥 **Local** - Selecione **múltiplos locais**!
-       - 🔍 **Busca Local** - Digite "BA" para encontrar todos que começam com BA!
-       - 📊 **Status** - Ver apenas visitados ou a visitar
-       - 📅 **Data** - Filtrar por período de visitas
-    4. **Selecione um médico** e clique em:
-       - ✅ **Marcar como Visitado** - Registrar visita com data no formato **dd/MM/yyyy**
-       - ✏️ **Editar Informações** - Editar todos os dados
-       - 🗑️ **Excluir Médico** - Remover da planilha
-    5. **Exporte a planilha** atualizada quando terminar
+    3. **Use os filtros** para encontrar os médicos
     
-    ### ✨ NOVIDADES:
+    ### 🏥 SELECIONAR LOCAIS (NOVO!):
     
-    - ✅ **Múltiplos Locais** - Selecione vários locais ao mesmo tempo!
-    - ✅ **Busca Inteligente** - Digite "BA" e veja todos os BAIA SUL, BAIA SUL CENTER, etc.
+    1. **Digite "BA"** no campo de busca → aparecem todos os BAIA SUL
+    2. **Selecione** os que você quer adicionar
+    3. **Clique em "Adicionar"** → eles vão para a lista permanente!
+    4. **Digite "RES"** → aparecem os REGIONAIS
+    5. **Selecione** e clique em "Adicionar"
+    6. **AMBOS os grupos ficam selecionados!** 🎯
+    7. **Remova** locais individualmente com o botão ✕
+    8. **Limpe tudo** com o botão "Limpar Todos"
+    
+    ### ✨ Funcionalidades:
+    
+    - ✅ **Seleção PERMANENTE de locais** - Não some quando você muda a busca!
+    - ✅ **Busca independente** - Digite "BA" para achar BAIA SUL, "RES" para REGIONAIS
+    - ✅ **Adicionar múltiplos locais** de uma vez
+    - ✅ **Remover individualmente** cada local
+    - ✅ **Ver lista completa** dos locais selecionados
     - ✅ **Datas no formato brasileiro (dd/MM/yyyy)**
-    - ✅ **Filtro inteligente:** Bairros e Locais são filtrados automaticamente pela cidade
-    - ✅ **Editar todas as informações** dos médicos
     - ✅ **Exportar** filtrada, completa, por status ou backup
     """)
