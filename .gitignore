@@ -1,0 +1,11 @@
+# .gitignore
+*.pyc
+__pycache__/
+*.xlsx
+*.xls
+.env
+venv/
+.venv/
+.vscode/
+*.log
+.DS_Store
