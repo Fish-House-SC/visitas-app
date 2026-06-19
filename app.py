@@ -1,4 +1,4 @@
-# app.py - Versão FINAL com persistência REAL
+# app.py - Versão CORRIGIDA (Edição de nome funciona!)
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -22,7 +22,6 @@ def hoje_br():
 
 # ===== FUNÇÃO PARA OBTER COLUNAS DISPONÍVEIS =====
 def get_colunas_disponiveis(df):
-    """Retorna lista de colunas disponíveis com seus nomes amigáveis"""
     colunas = []
     if 'Médico' in df.columns:
         colunas.append(('Médico', '👨‍⚕️ Médico'))
@@ -78,6 +77,8 @@ if 'colunas_selecionadas' not in st.session_state:
     st.session_state.colunas_selecionadas = []
 if 'colunas_inicializadas' not in st.session_state:
     st.session_state.colunas_inicializadas = False
+if 'mostrar_gerenciador_colunas' not in st.session_state:
+    st.session_state.mostrar_gerenciador_colunas = False
 
 # ===== UPLOAD DO ARQUIVO =====
 st.sidebar.header("📤 Upload da Planilha")
@@ -103,7 +104,6 @@ if uploaded_file is not None:
             if 'Data_Visita' not in df.columns:
                 df['Data_Visita'] = ''
             
-            # Converte datas para string
             if 'Data_Visita' in df.columns:
                 df['Data_Visita'] = df['Data_Visita'].apply(
                     lambda x: formatar_data_br(x) if pd.notna(x) else ''
@@ -124,35 +124,24 @@ if uploaded_file is not None:
     st.sidebar.markdown("---")
     st.sidebar.header("🔍 Filtros")
     
-    # Status
     status_filter = st.sidebar.selectbox(
         "Status",
         ['Todos', 'A Visitar', 'Visitado']
     )
     
-    # ===== CIDADE =====
     st.sidebar.subheader("📍 Localização")
     cidades = ['Todos'] + sorted(df['Cidade'].dropna().unique().tolist())
-    cidade_filter = st.sidebar.selectbox(
-        "Cidade",
-        cidades,
-        key="cidade_filter"
-    )
+    cidade_filter = st.sidebar.selectbox("Cidade", cidades, key="cidade_filter")
     
-    # ===== BAIRRO =====
     if cidade_filter != 'Todos':
         bairros_cidade = df[df['Cidade'] == cidade_filter]['Bairro'].dropna().unique().tolist()
         bairros_cidade = sorted(bairros_cidade)
     else:
         bairros_cidade = sorted(df['Bairro'].dropna().unique().tolist())
     
-    bairro_filter = st.sidebar.selectbox(
-        "Bairro",
-        ['Todos'] + bairros_cidade,
-        key="bairro_filter"
-    )
+    bairro_filter = st.sidebar.selectbox("Bairro", ['Todos'] + bairros_cidade, key="bairro_filter")
     
-    # ===== LOCAL - SELEÇÃO PERMANENTE =====
+    # ===== LOCAL =====
     st.sidebar.subheader("🏥 Selecionar Locais")
     
     if cidade_filter != 'Todos':
@@ -165,11 +154,7 @@ if uploaded_file is not None:
         locais_cidade = sorted(locais_cidade)
     
     st.sidebar.markdown("**🔍 Buscar local:**")
-    busca_local = st.sidebar.text_input(
-        "",
-        placeholder="Digite para buscar (ex: BA, RES, HOSPITAL...)",
-        key="busca_local_input"
-    )
+    busca_local = st.sidebar.text_input("", placeholder="Digite para buscar (ex: BA, RES...)", key="busca_local_input")
     
     if busca_local:
         busca_local_upper = busca_local.upper().strip()
@@ -220,35 +205,23 @@ if uploaded_file is not None:
     st.sidebar.markdown("---")
     st.sidebar.subheader("📅 Filtro por Data")
     
-    data_inicio = st.sidebar.date_input(
-        "Data Início",
-        value=datetime.now().date() - timedelta(days=30)
-    )
-    data_fim = st.sidebar.date_input(
-        "Data Fim",
-        value=datetime.now().date()
-    )
+    data_inicio = st.sidebar.date_input("Data Início", value=datetime.now().date() - timedelta(days=30))
+    data_fim = st.sidebar.date_input("Data Fim", value=datetime.now().date())
     usar_filtro_data = st.sidebar.checkbox("✅ Filtrar por data de visita")
     
-    # Busca geral
-    busca = st.sidebar.text_input(
-        "🔍 Buscar médico",
-        placeholder="Nome, bairro ou cidade..."
-    )
+    busca = st.sidebar.text_input("🔍 Buscar médico", placeholder="Nome, bairro ou cidade...")
     
-    # ===== SELEÇÃO DE COLUNAS (PERSISTENTE) =====
+    # ===== SELEÇÃO DE COLUNAS =====
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Colunas para Exibir")
     
     colunas_disponiveis = get_colunas_disponiveis(df)
     nomes_colunas = [col for col, _ in colunas_disponiveis]
     
-    # Inicializa as colunas selecionadas se ainda não foram
     if not st.session_state.colunas_inicializadas:
         st.session_state.colunas_selecionadas = nomes_colunas.copy()
         st.session_state.colunas_inicializadas = True
     
-    # Opções de visualização rápida
     opcoes_visuais = {
         "👀 Modo Rápido": ['Médico', 'Horário de Atendimento'],
         "📊 Modo Visitas": ['Médico', 'Status', 'Data_Visita', 'Horário de Atendimento'],
@@ -256,13 +229,8 @@ if uploaded_file is not None:
         "📋 Modo Completo": nomes_colunas
     }
     
-    # Dropdown para selecionar modo rápido
-    modo_visual = st.sidebar.selectbox(
-        "🎯 Modo de Visualização:",
-        ['Personalizado'] + list(opcoes_visuais.keys())
-    )
+    modo_visual = st.sidebar.selectbox("🎯 Modo de Visualização:", ['Personalizado'] + list(opcoes_visuais.keys()))
     
-    # Aplica o modo rápido se selecionado
     if modo_visual != 'Personalizado':
         colunas_nomes = opcoes_visuais[modo_visual]
         novas_colunas = [col for col in nomes_colunas if col in colunas_nomes]
@@ -270,8 +238,6 @@ if uploaded_file is not None:
             st.session_state.colunas_selecionadas = novas_colunas
             st.rerun()
     
-    # ===== MULTISELECT =====
-    # IMPORTANTE: USAR O VALOR DO ESTADO COMO DEFAULT
     colunas_selecionadas = st.sidebar.multiselect(
         "Selecione as colunas:",
         options=nomes_colunas,
@@ -279,10 +245,7 @@ if uploaded_file is not None:
         key="multiselect_colunas_persistente"
     )
     
-    # Atualiza o estado com o valor atual (NÃO usar rerun aqui!)
     st.session_state.colunas_selecionadas = colunas_selecionadas
-    
-    # Mostra quantas colunas estão selecionadas
     st.sidebar.caption(f"📊 {len(colunas_selecionadas)} colunas selecionadas")
     
     # ===== APLICA FILTROS =====
@@ -309,7 +272,6 @@ if uploaded_file is not None:
     if st.session_state.locais_selecionados:
         df_filtrado = df_filtrado[df_filtrado['Local'].isin(st.session_state.locais_selecionados)]
     
-    # Filtro por data
     if usar_filtro_data and 'Data_Visita' in df_filtrado.columns:
         def converter_para_datetime(data_str):
             if pd.isna(data_str) or data_str == '':
@@ -345,25 +307,72 @@ if uploaded_file is not None:
     
     st.markdown("---")
     
-    # ===== TABELA COM SELEÇÃO DE COLUNAS =====
+    # ===== GERENCIADOR DE COLUNAS =====
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn2:
+        if st.button("📋 Gerenciar Colunas", type="secondary", use_container_width=True):
+            st.session_state.mostrar_gerenciador_colunas = not st.session_state.mostrar_gerenciador_colunas
+            st.rerun()
+    
+    if st.session_state.mostrar_gerenciador_colunas:
+        st.markdown("---")
+        st.subheader("📋 Selecionar Colunas para Exibir")
+        
+        # Checkboxes
+        cols_check = st.columns(min(len(nomes_colunas), 6))
+        for i, col_nome in enumerate(nomes_colunas):
+            col_idx = i % len(cols_check)
+            with cols_check[col_idx]:
+                is_checked = col_nome in st.session_state.colunas_selecionadas
+                checked = st.checkbox(
+                    col_nome,
+                    value=is_checked,
+                    key=f"col_{col_nome}"
+                )
+                if checked and col_nome not in st.session_state.colunas_selecionadas:
+                    st.session_state.colunas_selecionadas.append(col_nome)
+                elif not checked and col_nome in st.session_state.colunas_selecionadas:
+                    st.session_state.colunas_selecionadas.remove(col_nome)
+        
+        # BOTÕES RÁPIDOS CORRIGIDOS
+        col_sel1, col_sel2, col_sel3, col_sel4 = st.columns(4)
+        with col_sel1:
+            if st.button("✅ Selecionar Todas", use_container_width=True, key="btn_selecionar_todas"):
+                st.session_state.colunas_selecionadas = nomes_colunas.copy()
+                st.rerun()
+        with col_sel2:
+            if st.button("⬜ Desmarcar Todas", use_container_width=True, key="btn_desmarcar_todas"):
+                st.session_state.colunas_selecionadas = []
+                st.rerun()
+        with col_sel3:
+            if st.button("👀 Modo Rápido", use_container_width=True, key="btn_modo_rapido"):
+                st.session_state.colunas_selecionadas = ['Médico', 'Horário de Atendimento']
+                st.rerun()
+        with col_sel4:
+            if st.button("📋 Modo Completo", use_container_width=True, key="btn_modo_completo"):
+                st.session_state.colunas_selecionadas = nomes_colunas.copy()
+                st.rerun()
+        
+        st.markdown("---")
+    
+    # ===== TABELA =====
     st.subheader(f"📋 Lista de Médicos ({len(df_filtrado)} encontrados)")
     
-    # Usa as colunas selecionadas do estado
     colunas_exibir = st.session_state.colunas_selecionadas if st.session_state.colunas_selecionadas else ['Médico', 'Horário de Atendimento']
-    
-    # Filtra apenas colunas que existem
     colunas_existentes = [col for col in colunas_exibir if col in df_filtrado.columns]
     
     if not colunas_existentes:
         st.warning("⚠️ Nenhuma coluna selecionada. Mostrando colunas padrão.")
         colunas_existentes = ['Médico', 'Horário de Atendimento']
     
-    # Cria o DataFrame de exibição
-    df_exibicao = df_filtrado[colunas_existentes].copy()
+    # ===== CRIA UM ID ÚNICO PARA CADA LINHA =====
+    df_filtrado_com_id = df_filtrado.copy()
+    df_filtrado_com_id['_id'] = df_filtrado_com_id.index
     
-    # Garante que todas as colunas sejam string para evitar erros
+    df_exibicao = df_filtrado_com_id[colunas_existentes + ['_id']].copy()
+    
     for col in df_exibicao.columns:
-        if col != 'Status':
+        if col != 'Status' and col != '_id':
             df_exibicao[col] = df_exibicao[col].apply(
                 lambda x: str(x) if pd.notna(x) else ''
             )
@@ -391,20 +400,12 @@ if uploaded_file is not None:
             column_config[col] = st.column_config.TextColumn("📅 Data Visita", width="medium")
         elif col == 'Horário de Atendimento':
             column_config[col] = st.column_config.TextColumn("🕐 Horário", width="large")
-        elif col == 'UF/CRM':
-            column_config[col] = st.column_config.TextColumn("📋 CRM/UF", width="medium")
-        elif col == 'Especialidade':
-            column_config[col] = st.column_config.TextColumn("💉 Especialidade", width="medium")
-        elif col == 'Fone Clínica':
-            column_config[col] = st.column_config.TextColumn("📞 Clínica", width="medium")
-        elif col == 'Email1':
-            column_config[col] = st.column_config.TextColumn("✉️ Email", width="medium")
-        elif col == 'CEP':
-            column_config[col] = st.column_config.TextColumn("📮 CEP", width="medium")
         else:
             column_config[col] = st.column_config.TextColumn(col, width="medium")
     
-    # ===== DATA_EDITOR =====
+    # Oculta a coluna _id
+    column_config['_id'] = None
+    
     st.info(f"💡 Editando {len(colunas_existentes)} colunas. Dê duplo clique para editar e Enter para salvar!")
     
     try:
@@ -422,21 +423,29 @@ if uploaded_file is not None:
         st.dataframe(df_exibicao, use_container_width=True)
         edited_df = df_exibicao
     
-    # ===== BOTÃO PARA SALVAR ALTERAÇÕES =====
+    # ===== SALVAR ALTERAÇÕES =====
     col_salvar1, col_salvar2, col_salvar3 = st.columns([1, 2, 1])
     with col_salvar2:
         if st.button("💾 Salvar Alterações da Tabela", type="primary", use_container_width=True):
             try:
-                df_editado = edited_df
-                
-                # Atualiza o DataFrame principal com as edições
-                for idx, row in df_editado.iterrows():
-                    medico = row['Médico']
-                    idx_original = df[df['Médico'] == medico].index
-                    if len(idx_original) > 0:
-                        for col in colunas_existentes:
-                            if col in row:
-                                df.loc[idx_original[0], col] = row[col]
+                # Usa o _id para identificar cada linha
+                for idx, row in edited_df.iterrows():
+                    if '_id' in row and pd.notna(row['_id']):
+                        id_original = int(row['_id'])
+                        if id_original < len(df):
+                            # Atualiza todas as colunas
+                            for col in colunas_existentes:
+                                if col in row:
+                                    df.loc[id_original, col] = row[col]
+                    else:
+                        # Fallback: se não tiver _id, tenta pelo nome
+                        if 'Médico' in row:
+                            medico = row['Médico']
+                            idx_original = df[df['Médico'] == medico].index
+                            if len(idx_original) > 0:
+                                for col in colunas_existentes:
+                                    if col in row:
+                                        df.loc[idx_original[0], col] = row[col]
                 
                 st.session_state.df = df
                 st.success("✅ Alterações salvas com sucesso!")
@@ -450,10 +459,7 @@ if uploaded_file is not None:
     st.subheader("👤 Selecionar Médico para Ações Rápidas")
     
     medicos_lista = [''] + df_filtrado['Médico'].tolist()
-    medico_escolhido = st.selectbox(
-        "Selecione um médico:",
-        medicos_lista
-    )
+    medico_escolhido = st.selectbox("Selecione um médico:", medicos_lista)
     
     if medico_escolhido:
         col_actions, col_details = st.columns([1, 2])
@@ -628,20 +634,22 @@ else:
     1. **Clique em "Browse files"** no menu lateral esquerdo
     2. **Selecione a planilha** "Planilha medicos (1).xlsx"
     
-    ### 📋 SELEÇÃO DE COLUNAS (PERSISTENTE!):
+    ### 📋 GERENCIAR COLUNAS:
     
-    - **Todas as colunas** são mostradas por padrão
-    - Use o multiselect para **esconder** as colunas que não quer ver
-    - A seleção **NÃO muda** quando você troca de filtro!
-    - Use os **Modos de Visualização** para alternar rapidamente:
-      - 👀 **Modo Rápido:** só nome + horário
-      - 📊 **Modo Visitas:** foco em status e datas
-      - 📋 **Modo Completo:** todas as colunas
+    - Clique no botão **"📋 Gerenciar Colunas"** acima da tabela
+    - Selecione/desmarque as colunas que quer ver
+    - Use os botões rápidos:
+      - ✅ **Selecionar Todas**
+      - ⬜ **Desmarcar Todas**
+      - 👀 **Modo Rápido** (só Médico + Horário)
+      - 📋 **Modo Completo** (todas as colunas)
+    - A seleção **persiste** mesmo trocando de filtro!
     
     ### 🖱️ EDIÇÃO DIRETA:
     
     - **Duplo clique** em qualquer célula para editar
-    - **Pressione Enter** para salvar a alteração
+    - **Pressione Enter** para salvar
     - **Clique em "Salvar Alterações"** para confirmar todas as mudanças
-                Te adoro!!!
+    - **O nome do médico também pode ser alterado!**
+                - Te adoro!!!
     """)
