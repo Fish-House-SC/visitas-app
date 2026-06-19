@@ -1,4 +1,4 @@
-# app.py - Versão com data no formato BRASILEIRO (dd/MM/yyyy)
+# app.py - Versão com MÚLTIPLOS LOCAIS e BUSCA INTELIGENTE
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -19,24 +19,12 @@ def formatar_data_br(data):
         return ''
     try:
         if isinstance(data, str):
-            # Tenta converter string para datetime
             data_dt = pd.to_datetime(data)
         else:
             data_dt = data
         return data_dt.strftime('%d/%m/%Y')
     except:
         return str(data)
-
-def formatar_data_br_para_filtro(data):
-    """Converte data para formato datetime para filtro"""
-    if pd.isna(data) or data == '':
-        return None
-    try:
-        if isinstance(data, str):
-            return pd.to_datetime(data, format='%d/%m/%Y')
-        return data
-    except:
-        return None
 
 def hoje_br():
     """Retorna a data de hoje no formato brasileiro"""
@@ -151,9 +139,10 @@ if uploaded_file is not None:
         key="bairro_filter"
     )
     
-    # ===== LOCAL (DEPENDENTE DA CIDADE) =====
+    # ===== LOCAL - MÚLTIPLA SELEÇÃO COM BUSCA =====
     st.sidebar.subheader("🏥 Local")
     
+    # Obtém os locais baseado na cidade selecionada
     if cidade_filter != 'Todos':
         locais_cidade = df[df['Cidade'] == cidade_filter]['Local'].dropna().unique().tolist()
         locais_cidade = [str(l).strip() for l in locais_cidade if str(l).strip() != '']
@@ -163,17 +152,39 @@ if uploaded_file is not None:
         locais_cidade = [str(l).strip() for l in locais_cidade if str(l).strip() != '']
         locais_cidade = sorted(locais_cidade)
     
-    local_filter = st.sidebar.selectbox(
-        "Local de Atendimento",
-        ['Todos'] + locais_cidade,
-        help="Filtra pelos locais de atendimento. Os locais são filtrados automaticamente pela cidade selecionada!"
+    # ===== BUSCA INTELIGENTE POR LOCAL =====
+    st.sidebar.markdown("**Busca inteligente:**")
+    busca_local = st.sidebar.text_input(
+        "🔍 Digite parte do nome (ex: BA)",
+        placeholder="Ex: BA, ANGIO, HOSPITAL...",
+        help="Digite as primeiras letras do local. Ex: 'BA' mostra BAIA SUL, BAIA SUL CENTER, etc."
     )
     
-    # ===== FILTRO POR DATA (FORMATO BRASILEIRO) =====
+    # Filtra os locais baseado na busca
+    if busca_local:
+        busca_local_upper = busca_local.upper().strip()
+        locais_filtrados = [l for l in locais_cidade if busca_local_upper in l.upper()]
+    else:
+        locais_filtrados = locais_cidade
+    
+    # ===== MÚLTIPLA SELEÇÃO DE LOCAIS =====
+    locais_selecionados = st.sidebar.multiselect(
+        "Selecione um ou mais locais:",
+        options=locais_filtrados,
+        default=[],
+        help="Escolha vários locais para filtrar. Use a busca acima para encontrar mais rápido!"
+    )
+    
+    # Mostra quantos locais foram selecionados
+    if locais_selecionados:
+        st.sidebar.info(f"📍 {len(locais_selecionados)} locais selecionados")
+    else:
+        st.sidebar.info("📍 Nenhum local selecionado (mostra todos)")
+    
+    # ===== FILTRO POR DATA =====
     st.sidebar.markdown("---")
     st.sidebar.subheader("📅 Filtro por Data")
     
-    # Usa date_input do Streamlit (já funciona com datas)
     data_inicio = st.sidebar.date_input(
         "Data Início",
         value=datetime.now().date() - timedelta(days=30)
@@ -184,16 +195,16 @@ if uploaded_file is not None:
     )
     usar_filtro_data = st.sidebar.checkbox("✅ Filtrar por data de visita")
     
-    # Busca
+    # Busca geral
     busca = st.sidebar.text_input(
-        "🔍 Buscar",
+        "🔍 Buscar médico",
         placeholder="Nome, bairro ou cidade..."
     )
     
     # ===== APLICA FILTROS =====
     df_filtrado = df.copy()
     
-    # Busca
+    # Busca geral
     if busca:
         mask = (
             df_filtrado['Médico'].str.contains(busca, case=False, na=False) |
@@ -215,13 +226,12 @@ if uploaded_file is not None:
     if bairro_filter != 'Todos':
         df_filtrado = df_filtrado[df_filtrado['Bairro'] == bairro_filter]
     
-    # Local
-    if local_filter != 'Todos':
-        df_filtrado = df_filtrado[df_filtrado['Local'] == local_filter]
+    # ===== LOCAL - MÚLTIPLA SELEÇÃO =====
+    if locais_selecionados:
+        df_filtrado = df_filtrado[df_filtrado['Local'].isin(locais_selecionados)]
     
-    # ===== FILTRO POR DATA (FORMATO BRASILEIRO) =====
+    # Data
     if usar_filtro_data and 'Data_Visita' in df_filtrado.columns:
-        # Converte as datas do formato brasileiro para datetime
         def converter_para_datetime(data_str):
             if pd.isna(data_str) or data_str == '':
                 return None
@@ -230,10 +240,7 @@ if uploaded_file is not None:
             except:
                 return None
         
-        # Aplica a conversão
         df_filtrado['Data_Visita_DT'] = df_filtrado['Data_Visita'].apply(converter_para_datetime)
-        
-        # Filtra
         mask_data = (df_filtrado['Data_Visita_DT'] >= pd.Timestamp(data_inicio)) & \
                     (df_filtrado['Data_Visita_DT'] <= pd.Timestamp(data_fim) + pd.Timedelta(days=1))
         df_filtrado = df_filtrado[mask_data]
@@ -250,7 +257,6 @@ if uploaded_file is not None:
     with col4:
         st.metric("📅 Hoje", hoje_br())
     with col5:
-        # Conta visitas de hoje no formato brasileiro
         hoje = hoje_br()
         visitas_hoje = len(df[df['Data_Visita'] == hoje])
         st.metric("📌 Visitas Hoje", visitas_hoje)
@@ -260,11 +266,11 @@ if uploaded_file is not None:
     # ===== TABELA PRINCIPAL =====
     st.subheader(f"📋 Lista de Médicos ({len(df_filtrado)} encontrados)")
     
-    # Exibe a tabela - formatando as datas
+    # Exibe a tabela
     colunas_exibir = ['Médico', 'Local', 'Bairro', 'Cidade', 'Celular Médico', 'Status', 'Data_Visita']
     df_display = df_filtrado[colunas_exibir].copy()
     
-    # Formata as datas para exibição (já estão no formato correto)
+    # Formata as datas
     if 'Data_Visita' in df_display.columns:
         df_display['Data_Visita'] = df_display['Data_Visita'].apply(
             lambda x: x if pd.isna(x) or x == '' else str(x)
@@ -299,15 +305,13 @@ if uploaded_file is not None:
         with col_actions:
             st.subheader("⚡ Ações")
             
-            # Botão Marcar como Visitado (com data no formato brasileiro)
             if st.button("✅ Marcar como Visitado", type="primary", use_container_width=True):
                 idx = df[df['Médico'] == medico_selecionado].index
                 if len(idx) > 0:
-                    hoje = hoje_br()  # Data no formato dd/MM/yyyy
+                    hoje = hoje_br()
                     df.loc[idx, 'Status'] = 'Visitado'
                     df.loc[idx, 'Ultima_Visita'] = hoje
                     df.loc[idx, 'Data_Visita'] = hoje
-                    # Próxima visita: 7 dias depois (em formato brasileiro)
                     proxima = (datetime.now() + timedelta(days=7)).strftime('%d/%m/%Y')
                     df.loc[idx, 'Proxima_Visita'] = proxima
                     
@@ -315,7 +319,6 @@ if uploaded_file is not None:
                     st.success(f"✅ Visita registrada para {medico_selecionado} em {hoje}!")
                     st.rerun()
             
-            # Botão Resetar Status
             if st.button("🔄 Resetar Status", type="secondary", use_container_width=True):
                 idx = df[df['Médico'] == medico_selecionado].index
                 if len(idx) > 0:
@@ -328,13 +331,11 @@ if uploaded_file is not None:
                     st.warning(f"🔄 Status resetado para {medico_selecionado}!")
                     st.rerun()
             
-            # Botão Editar
             if st.button("✏️ Editar Informações", type="secondary", use_container_width=True):
                 st.session_state.modo_edicao = True
                 st.session_state.medico_editando = medico_selecionado
                 st.rerun()
             
-            # Botão Excluir
             if st.button("🗑️ Excluir Médico", type="secondary", use_container_width=True):
                 if st.button("⚠️ Confirmar Exclusão", type="primary"):
                     excluir_medico(medico_selecionado)
@@ -537,25 +538,22 @@ else:
     3. **Use os filtros** para encontrar os médicos:
        - 📍 **Cidade** - Selecione a cidade (Bairros e Locais são filtrados automaticamente!)
        - 🏘️ **Bairro** - Apenas bairros da cidade selecionada
-       - 🏥 **Local** - Apenas locais da cidade selecionada
+       - 🏥 **Local** - Selecione **múltiplos locais**!
+       - 🔍 **Busca Local** - Digite "BA" para encontrar todos que começam com BA!
        - 📊 **Status** - Ver apenas visitados ou a visitar
-       - 📅 **Data** - Filtrar por período de visitas (formato brasileiro)
+       - 📅 **Data** - Filtrar por período de visitas
     4. **Selecione um médico** e clique em:
        - ✅ **Marcar como Visitado** - Registrar visita com data no formato **dd/MM/yyyy**
        - ✏️ **Editar Informações** - Editar todos os dados
        - 🗑️ **Excluir Médico** - Remover da planilha
     5. **Exporte a planilha** atualizada quando terminar
     
-    ### ✨ Funcionalidades:
+    ### ✨ NOVIDADES:
     
+    - ✅ **Múltiplos Locais** - Selecione vários locais ao mesmo tempo!
+    - ✅ **Busca Inteligente** - Digite "BA" e veja todos os BAIA SUL, BAIA SUL CENTER, etc.
     - ✅ **Datas no formato brasileiro (dd/MM/yyyy)**
     - ✅ **Filtro inteligente:** Bairros e Locais são filtrados automaticamente pela cidade
     - ✅ **Editar todas as informações** dos médicos
-    - ✅ **Excluir médicos** da planilha
-    - ✅ **Exportar planilha filtrada** (apenas médicos selecionados)
-    - ✅ **Exportar planilha completa**
-    - ✅ **Exportar por status** (visitados / a visitar)
-    - ✅ **Backup** com timestamp
-    - ✅ Marcar visitas com data e hora
-    - ✅ Estatísticas em tempo real
+    - ✅ **Exportar** filtrada, completa, por status ou backup
     """)
