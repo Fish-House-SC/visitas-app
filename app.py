@@ -643,4 +643,5 @@ else:
     - **Duplo clique** em qualquer célula para editar
     - **Pressione Enter** para salvar a alteração
     - **Clique em "Salvar Alterações"** para confirmar todas as mudanças
+                Te adoro!!!
     """)
