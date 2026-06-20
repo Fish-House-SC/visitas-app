@@ -375,7 +375,7 @@ def pagina_adicionar_medico():
 
 # ===== PÁGINA PRINCIPAL =====
 def pagina_principal():
-    st.title("🎯 Sistema de Gestão de Visitas - Ariana Martins")
+    st.title("🎯 Sistema de Gestão de Visitas - Ariana Martins (Te adora!!!)")
     st.markdown("---")
     
     # ===== BOTÃO PARA ADICIONAR MÉDICO =====
